@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAIfe-D: Your AI Life Coach</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --background-color: #ecf0f1;
+            --text-color: #34495e;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            color: var(--primary-color);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .upload-section, .preview-section, .analysis-section {
+            background-color: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-step {
+            display: none;
+        }
+
+        .upload-step.active {
+            display: block;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--primary-color);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .upload-area:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+
+        .button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .button:hover {
+            background-color: #2980b9;
+        }
+
+        .button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+        }
+
+        .image-preview {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .preview-item {
+            aspect-ratio: 1;
+            background-color: #f1f1f1;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #777;
+            overflow: hidden;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LAIfe-D: Your AI Life Coach</h1>
+        </header>
+
+        <main class="main-grid">
+            <section id="upload-section" class="upload-section">
+                <h2>Upload Your Vision</h2>
+                <div id="step1" class="upload-step active">
+                    <h3>Love</h3>
+                    <p>How do you envision your ideal relationships and connections? What qualities do you want to cultivate in your personal life?</p>
+                    <div class="upload-area" id="upload-area-1">
+                        <p>Click or drag to upload an image</p>
+                        <input type="file" hidden id="upload-love" accept="image/*">
+                    </div>
+                </div>
+                <div id="step2" class="upload-step">
+                    <h3>Work</h3>
+                    <p>What does your ideal career look like? What goals do you have for your professional life?</p>
+                    <div class="upload-area" id="upload-area-2">
+                        <p>Click or drag to upload an image</p>
+                        <input type="file" hidden id="upload-work" accept="image/*">
+                    </div>
+                </div>
+                <div id="step3" class="upload-step">
+                    <h3>Play</h3>
+                    <p>How do you want to spend your leisure time? What hobbies or activities bring you joy?</p>
+                    <div class="upload-area" id="upload-area-3">
+                        <p>Click or drag to upload an image</p>
+                        <input type="file" hidden id="upload-play" accept="image/*">
+                    </div>
+                </div>
+                <div id="step4" class="upload-step">
+                    <h3>Health</h3>
+                    <p>What does optimal health and wellness look like to you? What habits or practices do you want to incorporate?</p>
+                    <div class="upload-area" id="upload-area-4">
+                        <p>Click or drag to upload an image</p>
+                        <input type="file" hidden id="upload-health" accept="image/*">
+                    </div>
+                </div>
+                <div class="navigation">
+                    <button class="button" id="prev-btn" disabled>Back</button>
+                    <button class="button" id="next-btn">Next</button>
+                </div>
+            </section>
+
+            <section id="preview-section" class="preview-section">
+                <h2>Your Vision Board</h2>
+                <div class="image-preview">
+                    <div class="preview-item" id="preview-1">Love</div>
+                    <div class="preview-item" id="preview-2">Work</div>
+                    <div class="preview-item" id="preview-3">Play</div>
+                    <div class="preview-item" id="preview-4">Health</div>
+                </div>
+            </section>
+
+            <section id="analysis-section" class="analysis-section">
+                <h2>Vision Board Analysis</h2>
+                <div id="analysis-results"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const steps = document.querySelectorAll('.upload-step');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        let currentStep = 0;
+        const uploadedImages = {
+            love: null,
+            work: null,
+            play: null,
+            health: null
+        };
+        let model;
+
+        // Class category mapping
+        const classCategoryMapping = {
+            love: ["heart", "rose", "kiss", "couple", "wedding", "romance", "family"],
+            work: ["computer", "office", "desk", "business", "meeting", "presentation", "career"],
+            play: ["game", "sport", "hobby", "music", "art", "travel", "entertainment"],
+            health: ["exercise", "nutrition", "meditation", "yoga", "gym", "wellness", "nature"]
+        };
+
+
+        // Load MobileNet model
+        async function loadModel() {
+            model = await mobilenet.load();
+            console.log('MobileNet model loaded');
+        }
+
+        loadModel();
+
+        function updateSteps() {
+            steps.forEach((step, index) => {
+                step.classList.toggle('active', index === currentStep);
+            });
+            prevBtn.disabled = currentStep === 0;
+            nextBtn.textContent = currentStep === steps.length - 1 ? 'Analyze' : 'Next';
+        }
+
+        prevBtn.addEventListener('click', () => {
+            if (currentStep > 0) {
+                currentStep--;
+                updateSteps();
+            }
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (currentStep < steps.length - 1) {
+                currentStep++;
+                updateSteps();
+            } else {
+                // Trigger analysis when all images are uploaded
+                if (Object.values(uploadedImages).every(img => img !== null)) {
+                    analyzeImages();
+                } else {
+                    alert('Please upload all four images before analyzing.');
+                }
+            }
+        });
+
+        // Image upload functionality
+        const uploadAreas = document.querySelectorAll('.upload-area');
+        const fileInputs = document.querySelectorAll('input[type="file"]');
+        const categories = ['love', 'work', 'play', 'health'];
+
+        uploadAreas.forEach((area, index) => {
+            area.addEventListener('click', () => {
+                fileInputs[index].click();
+            });
+
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+            });
+
+            area.addEventListener('dragleave', () => {
+                area.style.backgroundColor = '';
+            });
+
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.style.backgroundColor = '';
+                handleFile(e.dataTransfer.files[0], index);
+            });
+        });
+
+        fileInputs.forEach((input, index) => {
+            input.addEventListener('change', (e) => {
+                handleFile(e.target.files[0], index);
+            });
+        });
+
+        function handleFile(file, index) {
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    updatePreview(e.target.result, `preview-${index + 1}`);
+                    uploadedImages[categories[index]] = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('Please upload a valid image file.');
+            }
+        }
+
+        function updatePreview(src, previewId) {
+            const previewElement = document.getElementById(previewId);
+            previewElement.innerHTML = '';
+            const img = document.createElement('img');
+            img.src = src;
+            previewElement.appendChild(img);
+        }
+
+        async function analyzeImages() {
+            const analysisResults = document.getElementById('analysis-results');
+            analysisResults.innerHTML = '<p>Analyzing images...</p>';
+
+            try {
+                const results = {};
+                for (const category in uploadedImages) {
+                    const img = new Image();
+                    img.src = uploadedImages[category];
+                    await img.decode(); // Ensure the image is loaded
+                    const predictions = await model.classify(img);
+
+                    // Get top 3 predictions
+                    const topPredictions = predictions.slice(0, 3);
+
+                    // Detected classes
+                    const detectedClasses = topPredictions.map(p => p.className).join(', ');
+
+                    // Map to category
+                    const mappedCategory = identifyCategory(topPredictions.map(p => p.className));
+
+                    results[category] = {
+                        detectedClasses: detectedClasses,
+                        mappedCategory: mappedCategory
+                    };
+                }
+                displayAnalysisResults(results);
+            } catch (error) {
+                console.error('Error:', error);
+                analysisResults.innerHTML = '<p>An error occurred during analysis. Please try again.</p>';
+            }
+        }
+
+
+        function identifyCategory(detectedClasses) {
+            for (const category in classCategoryMapping) {
+                for (const detectedClass of detectedClasses) {
+                    if (classCategoryMapping[category].some(keyword =>
+                        detectedClass.toLowerCase().includes(keyword.toLowerCase()))) {
+                        return category;
+                    }
+                }
+            }
+            return "unknown";
+        }
+
+        function displayAnalysisResults(results) {
+            const analysisResults = document.getElementById('analysis-results');
+            analysisResults.innerHTML = '<h3>Vision Board Analysis</h3>';
+
+            for (const category in results) {
+                const categoryResult = document.createElement('div');
+                categoryResult.innerHTML = `
+                    <h4>${category.charAt(0).toUpperCase() + category.slice(1)}</h4>
+                    <p>Detected classes: ${results[category].detectedClasses}</p>
+                    <p>Mapped category: ${results[category].mappedCategory}</p>
+                `;
+                analysisResults.appendChild(categoryResult);
+            }
+        }
+    </script>
+</body>
+</html>
